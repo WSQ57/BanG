@@ -30,5 +30,11 @@ func main() {
 		ctx.String(http.StatusOK, "匹配的值为：%s", name)
 	})
 
+	// 查询参数
+	server.GET("/order", func(ctx *gin.Context) {
+		oid := ctx.Query("id")
+		ctx.String(http.StatusOK, "hello,查询参数"+oid)
+	})
+
 	server.Run(":8080") // 监听并在 0.0.0.0:8080 上启动服务
 }
