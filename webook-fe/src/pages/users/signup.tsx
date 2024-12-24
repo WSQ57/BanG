@@ -22,6 +22,17 @@ const onFinish = (values: any) => {
             }
 
         }).catch((err) => {
+            console.error("Axios 请求失败:", err);
+            if (err.response) {
+                // 请求成功发出，但服务器响应了一个状态码
+                alert(`请求错误: ${err.response.data?.error || err.response.statusText}`);
+            } else if (err.request) {
+                // 请求已经发出，但没有收到响应
+                alert("请求未收到响应");
+            } else {
+                // 其他错误
+                alert(`请求发生错误: ${err.message}`);
+            }
             alert(err);
     })
 };
