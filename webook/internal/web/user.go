@@ -5,7 +5,6 @@ import (
 	"net/http"
 
 	regexp "github.com/dlclark/regexp2"
-
 	"github.com/gin-gonic/gin"
 )
 
@@ -92,6 +91,9 @@ func (u *UserHandler) Signup(ctx *gin.Context) {
 
 	ctx.String(http.StatusOK, "注册成功")
 	fmt.Printf("%v", req)
+
+	// 数据库操作
+
 }
 
 func (u *UserHandler) Login(ctx *gin.Context) {
