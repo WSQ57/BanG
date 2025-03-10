@@ -47,18 +47,15 @@ func (dao *UserDAO) FindByEmail(ctx context.Context, email string) (User, error)
 	return u, err
 }
 
-// func (dao *UserDAO) Search(ctx context.Context, u User) error {
+func (dao *UserDAO) FindById(ctx context.Context, id int64) (User, error) {
+	var u User
+	err := dao.db.WithContext(ctx).Where("id = ?", id).First(&u).Error
+	return u, err
+}
 
-// 	var user User
-// 	err := dao.db.WithContext(ctx).First(&user, "Email = ?", u.Email).Error
-// 	if mysqlErr, ok := err.(*mysql.MySQLError); ok {
-// 		const uniqueConflictErr uint16 = 1062 // 唯一索引错误吗
-// 		if mysqlErr.Number == uniqueConflictErr {
-// 			return ErrUserDuplicateEmail
-// 		}
-// 	}
-// 	return err
-// }
+func (dao *UserDAO) Update(ctx context.Context, u User) error {
+	return dao.db.WithContext(ctx).Where("id = ?", u.Id).Updates(&u).Error
+}
 
 // User直接对应数据库表结构
 // 有些人叫做entity 有些叫做model 有些人叫做PO
@@ -67,6 +64,11 @@ type User struct {
 	// 所有用户唯一
 	Email    string `gorm:"unique"`
 	Password string
+
+	// 新增字段
+	Nickname string `gorm:"type=varchar(128)"`
+	Birthday int64
+	AboutMe  string `gorm:"type=varchar(4096)"`
 
 	// 创建时间 ms
 	Ctime int64

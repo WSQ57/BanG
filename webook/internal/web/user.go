@@ -5,6 +5,7 @@ import (
 	"dream/webook/internal/service"
 	"fmt"
 	"net/http"
+	"time"
 
 	regexp "github.com/dlclark/regexp2"
 	"github.com/gin-contrib/sessions"
@@ -43,14 +44,14 @@ func (u *UserHandler) RegisterRoutesv1(ug *gin.RouterGroup) {
 	ug.GET("profile", u.Profile)
 }
 
-func (u *UserHandler) RegisterRoutes(server *gin.Engine) {
-	// 分组路由
-	ug := server.Group("users")
-	ug.POST("signup", u.Signup)
-	ug.POST("login", u.Login)
-	ug.POST("edit", u.Edit)
-	ug.GET("profil", u.Profile)
-}
+// func (u *UserHandler) RegisterRoutes(server *gin.Engine) {
+// 	// 分组路由
+// 	ug := server.Group("users")
+// 	ug.POST("signup", u.Signup)
+// 	ug.POST("login", u.Login)
+// 	ug.POST("edit", u.Edit)
+// 	ug.GET("profil", u.Profile)
+// }
 
 func (u *UserHandler) Signup(ctx *gin.Context) {
 	// 内部结构体，不给别人用
@@ -152,9 +153,73 @@ func (u *UserHandler) Login(ctx *gin.Context) {
 }
 
 func (u *UserHandler) Edit(ctx *gin.Context) {
-
+	type EditReq struct {
+		Nickname string `json:"nickname"`
+		// YYYY-MM-DD
+		Birthday string `json:"birthday"`
+		AboutMe  string `json:"aboutMe"`
+	}
+	var req EditReq
+	if err := ctx.Bind(&req); err != nil {
+		ctx.String(http.StatusOK, "系统错误")
+		return
+	}
+	sess := sessions.Default(ctx)
+	id, ok := sess.Get("userId").(int64)
+	if !ok {
+		ctx.AbortWithStatus(http.StatusUnauthorized)
+		return
+	}
+	birthday, err := time.Parse(time.DateOnly, req.Birthday)
+	if err != nil {
+		ctx.String(http.StatusOK, "生日格式不对")
+		return
+	}
+	err = u.svc.EditProfile(ctx, domain.User{
+		Id:       id,
+		Birthday: birthday,
+		Nickname: req.Nickname,
+		AboutMe:  req.AboutMe,
+	})
+	if err == service.ErrUserNotFound {
+		ctx.String(http.StatusOK, "用户不存在")
+		return
+	}
+	if err != nil {
+		ctx.String(http.StatusOK, "系统错误")
+		return
+	}
+	// ctx.String(http.StatusOK, "修改成功")
+	ctx.JSON(http.StatusOK, gin.H{
+		"code": 1,
+		"msg":  "修改成功",
+	})
 }
 
 func (u *UserHandler) Profile(ctx *gin.Context) {
-	ctx.String(http.StatusOK, "这是profile")
+	// Email: "", Phone: "", Nickname: "", Birthday:"", AboutMe: ""
+	type ProfileReq struct {
+		Email    string
+		Nickname string
+		Birthday string
+		AboutMe  string
+	}
+	sess := sessions.Default(ctx)
+	if id, ok := sess.Get("userId").(int64); ok {
+		u, err := u.svc.Profile(ctx, id)
+		if err != nil {
+			ctx.String(http.StatusOK, "用户不存在")
+			return
+		}
+		ctx.JSON(http.StatusOK, ProfileReq{
+			Email:    u.Email,
+			Nickname: u.Nickname,
+			Birthday: u.Birthday.Format("2006-01-02"),
+			AboutMe:  u.AboutMe,
+		})
+
+	} else {
+		ctx.String(http.StatusOK, "非法用户")
+		return
+	}
 }
