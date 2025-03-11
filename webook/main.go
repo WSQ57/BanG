@@ -11,7 +11,7 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-contrib/sessions"
-	"github.com/gin-contrib/sessions/cookie"
+	"github.com/gin-contrib/sessions/redis"
 	"github.com/gin-gonic/gin"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -34,6 +34,7 @@ func initWebServer() *gin.Engine {
 		// AllowOrigins:     []string{"http://localhost:3000"},         // 允许的跨域源
 		AllowMethods:     []string{"GET", "POST", "OPTIONS"},        // 允许的 HTTP 方法
 		AllowHeaders:     []string{"Content-Type", "Authorization"}, // 允许的请求头
+		ExposeHeaders:    []string{"x-jwt-token"},                   // 可以读这个
 		AllowCredentials: true,                                      // 允许携带 Cookie
 		AllowOriginFunc: func(origin string) bool {
 			if strings.HasPrefix(origin, "http://localhost") {
@@ -46,11 +47,20 @@ func initWebServer() *gin.Engine {
 	}))
 
 	// 步骤1
-	store := cookie.NewStore([]byte("secret"))
+	// store := cookie.NewStore([]byte("secret"))
+
+	// 16为最大空闲连接，给将来用，提升速度
+	store, err := redis.NewStore(16, "tcp", "127.0.0.1:6379", "", []byte("5GsytMZWJd6fEHDKyhPH2tPQvbdAUdjp"), []byte("nAdm2JYmuJmyAPKkJpC6sVwsazMNFYuA"))
+	if err != nil {
+		panic(err)
+	}
+
 	server.Use(sessions.Sessions("mysession", store))
 
 	// 步骤3
-	server.Use(middleware.NewLoginMiddlewareBuilder().IgnorePaths("/users/login").IgnorePaths("/users/signup").Build())
+	// server.Use(middleware.NewLoginMiddlewareBuilder().IgnorePaths("/users/login").IgnorePaths("/users/signup").Build())
+
+	server.Use(middleware.NewLoginJWTMiddlewareBuilder().IgnorePaths("/users/login").IgnorePaths("/users/signup").Build())
 
 	// v1
 	// server.Use(middleware.CheckLogin())

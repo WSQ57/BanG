@@ -10,6 +10,7 @@ import (
 	regexp "github.com/dlclark/regexp2"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
+	jwt "github.com/golang-jwt/jwt/v5"
 )
 
 // 定义User相关路由
@@ -39,19 +40,20 @@ func (u *UserHandler) RegisterRoutesv1(ug *gin.RouterGroup) {
 	// 分组路由
 	// ug.OPTIONS("signup", )
 	ug.POST("signup", u.Signup)
-	ug.POST("login", u.Login)
+	// ug.POST("login", u.Login)
+	ug.POST("login", u.LoginJWT)
 	ug.POST("edit", u.Edit)
 	ug.GET("profile", u.Profile)
 }
 
-// func (u *UserHandler) RegisterRoutes(server *gin.Engine) {
-// 	// 分组路由
-// 	ug := server.Group("users")
-// 	ug.POST("signup", u.Signup)
-// 	ug.POST("login", u.Login)
-// 	ug.POST("edit", u.Edit)
-// 	ug.GET("profil", u.Profile)
-// }
+func (u *UserHandler) Logout(ctx *gin.Context) {
+	sess := sessions.Default(ctx)
+	sess.Options(sessions.Options{
+		MaxAge: -1,
+	})
+	sess.Save()
+	ctx.String(http.StatusOK, "退出成功")
+}
 
 func (u *UserHandler) Signup(ctx *gin.Context) {
 	// 内部结构体，不给别人用
@@ -117,6 +119,44 @@ func (u *UserHandler) Signup(ctx *gin.Context) {
 
 }
 
+func (u *UserHandler) LoginJWT(ctx *gin.Context) {
+	type LoginReq struct {
+		Email    string `json:"email"` // 对应json中的email字段
+		Password string `json:"password"`
+	}
+
+	var req LoginReq
+	// Bind 方法 根据Content-type解析数据到req
+	// 解析错误则直接写会400的错误
+	if err := ctx.Bind(&req); err != nil {
+		ctx.String(http.StatusOK, "系统错误")
+		return
+	}
+
+	user, err := u.svc.Login(ctx, req.Email, req.Password)
+	if err == service.ErrInvalidUserOrPassword {
+		ctx.String(http.StatusOK, "用户名或密码错误")
+		return
+	}
+	if err != nil {
+		ctx.String(http.StatusOK, "系统错误")
+		return
+	}
+	fmt.Println(user)
+
+	// 生成JWTtoken
+	token := jwt.New(jwt.SigningMethodHS512)
+	tokenStr, err := token.SignedString([]byte("svpmj5zytsDADRR2YX4ZnrJdT2xQm8BK"))
+	if err != nil {
+		ctx.String(http.StatusInternalServerError, "系统错误")
+		return
+	}
+	fmt.Println(tokenStr)
+	ctx.Header("x-jwt-token", tokenStr)
+
+	ctx.String(http.StatusOK, "登录成功")
+}
+
 func (u *UserHandler) Login(ctx *gin.Context) {
 	type LoginReq struct {
 		Email    string `json:"email"` // 对应json中的email字段
@@ -147,6 +187,9 @@ func (u *UserHandler) Login(ctx *gin.Context) {
 	sess := sessions.Default(ctx)
 	// 设置放在session中的值
 	sess.Set("userId", user.Id)
+	sess.Options(sessions.Options{
+		MaxAge: 30 * 60, // 60s
+	})
 	sess.Save()
 
 	ctx.String(http.StatusOK, "登录成功")
