@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"dream/webook/internal/web"
 	"encoding/gob"
 	"net/http"
 	"strings"
@@ -44,7 +45,9 @@ func (l *LoginJWTMiddleware) Build() gin.HandlerFunc {
 			return
 		}
 		tokenStr := segs[1]
-		token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (interface{}, error) {
+		claims := &web.UserClaims{} // 因为parse里面会赋值，因此要传入指针
+
+		token, err := jwt.ParseWithClaims(tokenStr, claims, func(t *jwt.Token) (any, error) {
 			return []byte("svpmj5zytsDADRR2YX4ZnrJdT2xQm8BK"), nil
 		})
 		if err != nil {
@@ -52,9 +55,11 @@ func (l *LoginJWTMiddleware) Build() gin.HandlerFunc {
 			ctx.AbortWithStatus(http.StatusUnauthorized)
 			return
 		}
-		if token == nil || !token.Valid {
+		if token == nil || !token.Valid || claims.UserId == 0 {
 			// 没登陆
 			ctx.AbortWithStatus(http.StatusUnauthorized)
+			return
 		}
+		ctx.Set("claims", claims)
 	}
 }

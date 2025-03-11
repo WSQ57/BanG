@@ -41,9 +41,13 @@ func (u *UserHandler) RegisterRoutesv1(ug *gin.RouterGroup) {
 	// ug.OPTIONS("signup", )
 	ug.POST("signup", u.Signup)
 	// ug.POST("login", u.Login)
+	// ug.POST("edit", u.Edit)
+	// ug.GET("profile", u.Profile)
+
 	ug.POST("login", u.LoginJWT)
-	ug.POST("edit", u.Edit)
-	ug.GET("profile", u.Profile)
+	ug.POST("edit", u.EditJWT)
+	ug.GET("profile", u.ProfileJWT)
+
 }
 
 func (u *UserHandler) Logout(ctx *gin.Context) {
@@ -145,7 +149,12 @@ func (u *UserHandler) LoginJWT(ctx *gin.Context) {
 	fmt.Println(user)
 
 	// 生成JWTtoken
-	token := jwt.New(jwt.SigningMethodHS512)
+
+	claims := UserClaims{
+		UserId: user.Id,
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS512, claims)
 	tokenStr, err := token.SignedString([]byte("svpmj5zytsDADRR2YX4ZnrJdT2xQm8BK"))
 	if err != nil {
 		ctx.String(http.StatusInternalServerError, "系统错误")
@@ -239,6 +248,77 @@ func (u *UserHandler) Edit(ctx *gin.Context) {
 	})
 }
 
+func (u *UserHandler) EditJWT(ctx *gin.Context) {
+	type EditReq struct {
+		Nickname string `json:"nickname"`
+		// YYYY-MM-DD
+		Birthday string `json:"birthday"`
+		AboutMe  string `json:"aboutMe"`
+	}
+	var req EditReq
+	if err := ctx.Bind(&req); err != nil {
+		ctx.String(http.StatusOK, "系统错误")
+		return
+	}
+
+	claims, ok := ctx.MustGet("claims").(*UserClaims)
+	if !ok {
+		ctx.AbortWithStatus(http.StatusUnauthorized)
+		return
+	}
+	birthday, err := time.Parse(time.DateOnly, req.Birthday)
+	if err != nil {
+		ctx.String(http.StatusOK, "生日格式不对")
+		return
+	}
+	err = u.svc.EditProfile(ctx, domain.User{
+		Id:       claims.UserId,
+		Birthday: birthday,
+		Nickname: req.Nickname,
+		AboutMe:  req.AboutMe,
+	})
+	if err == service.ErrUserNotFound {
+		ctx.String(http.StatusOK, "用户不存在")
+		return
+	}
+	if err != nil {
+		ctx.String(http.StatusOK, "系统错误")
+		return
+	}
+	// ctx.String(http.StatusOK, "修改成功")
+	ctx.JSON(http.StatusOK, gin.H{
+		"code": 1,
+		"msg":  "修改成功",
+	})
+}
+func (u *UserHandler) ProfileJWT(ctx *gin.Context) {
+	// Email: "", Phone: "", Nickname: "", Birthday:"", AboutMe: ""
+	type ProfileReq struct {
+		Email    string
+		Nickname string
+		Birthday string
+		AboutMe  string
+	}
+
+	if claims, ok := ctx.MustGet("claims").(*UserClaims); ok {
+		u, err := u.svc.Profile(ctx, claims.UserId)
+		if err != nil {
+			ctx.String(http.StatusOK, "用户不存在")
+			return
+		}
+		ctx.JSON(http.StatusOK, ProfileReq{
+			Email:    u.Email,
+			Nickname: u.Nickname,
+			Birthday: u.Birthday.Format("2006-01-02"),
+			AboutMe:  u.AboutMe,
+		})
+	} else {
+		ctx.String(http.StatusOK, "系统错误")
+		return
+	}
+
+}
+
 func (u *UserHandler) Profile(ctx *gin.Context) {
 	// Email: "", Phone: "", Nickname: "", Birthday:"", AboutMe: ""
 	type ProfileReq struct {
@@ -265,4 +345,9 @@ func (u *UserHandler) Profile(ctx *gin.Context) {
 		ctx.String(http.StatusOK, "非法用户")
 		return
 	}
+}
+
+type UserClaims struct {
+	UserId int64
+	jwt.RegisteredClaims
 }
