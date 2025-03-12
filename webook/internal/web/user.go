@@ -151,7 +151,12 @@ func (u *UserHandler) LoginJWT(ctx *gin.Context) {
 	// 生成JWTtoken
 
 	claims := UserClaims{
-		UserId: user.Id,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute)),
+			NotBefore: jwt.NewNumericDate(time.Now()),
+		}, // valid会自动检验是否过期
+		UserId:    user.Id,
+		UserAgent: ctx.Request.UserAgent(),
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS512, claims)
@@ -350,4 +355,5 @@ func (u *UserHandler) Profile(ctx *gin.Context) {
 type UserClaims struct {
 	UserId int64
 	jwt.RegisteredClaims
+	UserAgent string
 }

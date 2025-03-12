@@ -6,29 +6,43 @@ import (
 	"dream/webook/internal/service"
 	"dream/webook/internal/web"
 	"dream/webook/internal/web/middleware"
+	"dream/webook/pkg/ginx/middlewares/ratelimit"
+	"net/http"
 	"strings"
 	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-contrib/sessions"
-	"github.com/gin-contrib/sessions/redis"
+	"github.com/gin-contrib/sessions/memstore"
 	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )
 
 func main() {
 
-	db := initDB()
-	server := initWebServer()
+	// db := initDB()
+	// server := initWebServer()
+	// u := initUser(db)
 
-	u := initUser(db)
-	u.RegisterRoutesv1(server.Group("/users"))
+	server := gin.Default()
+	server.GET("/hello", func(ctx *gin.Context) {
+		ctx.String(http.StatusOK, "hello go")
+	})
+
+	// u.RegisterRoutesv1(server.Group("/users"))
 	server.Run(":8080")
 }
 
 func initWebServer() *gin.Engine {
 	server := gin.Default()
+
+	redisClient := redis.NewClient(&redis.Options{
+		Addr: "localhost:6379",
+	})
+	server.Use(ratelimit.NewBuilder(redisClient, time.Second, 100).Build()) // 每秒100
+
 	// 配置 CORS
 	server.Use(cors.New(cors.Config{
 		// AllowOrigins:     []string{"http://localhost:3000"},         // 允许的跨域源
@@ -50,10 +64,13 @@ func initWebServer() *gin.Engine {
 	// store := cookie.NewStore([]byte("secret"))
 
 	// 16为最大空闲连接，给将来用，提升速度
-	store, err := redis.NewStore(16, "tcp", "127.0.0.1:6379", "", []byte("5GsytMZWJd6fEHDKyhPH2tPQvbdAUdjp"), []byte("nAdm2JYmuJmyAPKkJpC6sVwsazMNFYuA"))
-	if err != nil {
-		panic(err)
-	}
+
+	// store, err := redis.NewStore(16, "tcp", "127.0.0.1:6379", "", []byte("5GsytMZWJd6fEHDKyhPH2tPQvbdAUdjp"), []byte("nAdm2JYmuJmyAPKkJpC6sVwsazMNFYuA"))
+	// if err != nil {
+	// panic(err)
+	// }
+
+	store := memstore.NewStore([]byte("5GsytMZWJd6fEHDKyhPH2tPQvbdAUdjp"), []byte("nAdm2JYmuJmyAPKkJpC6sVwsazMNFYuA"))
 
 	server.Use(sessions.Sessions("mysession", store))
 
