@@ -1,0 +1,14 @@
+apiVersion: v1
+# 指k8s有哪些volumn
+kind: PersistentVolume
+metadata:
+  name: my-local-pv
+spec:
+  # 要跟claim匹配
+  storageClassName: manual
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: "/mnt/live"

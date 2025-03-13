@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  # 指mysql要使用的
+  name: webook-mysql-claim
+  labels:
+    app: webook-mysql-claim
+spec:
+  # 随便取
+  storageClassName: manual
+  accessModes:
+   - ReadWriteOnce # 只允许单节点读写
+#    - ReadOnlyMany # 只允许多节点读
+    # - ReadWriteMany # 允许多节点读写 mysql应该用这个
+  resources:
+    requests:
+      storage: 1Gi
+  # volumeMode: Filesystem
+  # accessModes:
+  #   - ReadWriteOnce

@@ -1,13 +1,13 @@
 package main
 
 import (
+	"dream/webook/config"
 	"dream/webook/internal/repository"
 	"dream/webook/internal/repository/dao"
 	"dream/webook/internal/service"
 	"dream/webook/internal/web"
 	"dream/webook/internal/web/middleware"
 	"dream/webook/pkg/ginx/middlewares/ratelimit"
-	"net/http"
 	"strings"
 	"time"
 
@@ -22,16 +22,16 @@ import (
 
 func main() {
 
-	// db := initDB()
-	// server := initWebServer()
-	// u := initUser(db)
+	db := initDB()
+	server := initWebServer()
+	u := initUser(db)
+	u.RegisterRoutesv1(server.Group("/users"))
 
-	server := gin.Default()
-	server.GET("/hello", func(ctx *gin.Context) {
-		ctx.String(http.StatusOK, "hello go")
-	})
+	// server := gin.Default()
+	// server.GET("/hello", func(ctx *gin.Context) {
+	// 	ctx.String(http.StatusOK, "hello go")
+	// })
 
-	// u.RegisterRoutesv1(server.Group("/users"))
 	server.Run(":8080")
 }
 
@@ -39,7 +39,7 @@ func initWebServer() *gin.Engine {
 	server := gin.Default()
 
 	redisClient := redis.NewClient(&redis.Options{
-		Addr: "localhost:6379",
+		Addr: config.Config.Redis.Addr,
 	})
 	server.Use(ratelimit.NewBuilder(redisClient, time.Second, 100).Build()) // 每秒100
 
@@ -93,7 +93,7 @@ func initUser(db *gorm.DB) *web.UserHandler {
 }
 
 func initDB() *gorm.DB {
-	db, err := gorm.Open(mysql.Open("root:root@tcp(127.0.0.1:13316)/webook"))
+	db, err := gorm.Open(mysql.Open(config.Config.DB.DSN))
 	if err != nil {
 		// 初始化过程出错，应用就不要启动
 		panic(err)

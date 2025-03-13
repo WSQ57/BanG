@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webook-redis
+# specification 规格说明 
+spec:
+# 副本数量
+  replicas: 1
+  selector:
+    matchLabels:
+      app: webook-redis
+  # template描述POD是什么样的
+  template:
+    metadata:
+      labels:
+      # selector找的就是这个label
+        app: webook-redis
+    # pod的具体说明
+    spec:
+      containers:
+        - name: webook-redis
+          image: redis:latest
+          imagePullPolicy: IfNotPresent
+      restartPolicy: Always
