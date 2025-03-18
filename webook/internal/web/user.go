@@ -15,6 +15,12 @@ import (
 
 const biz = "login"
 
+// 确保 UserHandler 实现了handler接口
+var _ handler = &UserHandler{}
+
+// 也可以这样写，没初始化对象
+var _ handler = (*UserHandler)(nil)
+
 // 定义User相关路由
 type UserHandler struct {
 	svc         *service.UserService
@@ -40,7 +46,7 @@ func NewUserHandler(svc *service.UserService, codeSvc *service.CodeService) *Use
 	}
 }
 
-func (u *UserHandler) RegisterRoutesv1(ug *gin.RouterGroup) {
+func (u *UserHandler) RegisterRoutes(ug *gin.RouterGroup) {
 	// 分组路由
 	// ug.OPTIONS("signup", )
 	ug.POST("signup", u.Signup)

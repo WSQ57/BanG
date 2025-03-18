@@ -1,5 +1,11 @@
 package main
 
+import (
+	"net/http"
+
+	"github.com/gin-gonic/gin"
+)
+
 func main() {
 
 	server := initWebServer()
@@ -12,9 +18,9 @@ func main() {
 	// u.RegisterRoutesv1(server.Group("/users"))
 
 	// server := gin.Default()
-	// server.GET("/hello", func(ctx *gin.Context) {
-	// 	ctx.String(http.StatusOK, "hello go")
-	// })
+	server.GET("/hello", func(ctx *gin.Context) {
+		ctx.String(http.StatusOK, "hello go")
+	})
 	server.Run(":8080")
 }
 

@@ -15,7 +15,7 @@ import (
 func InitGin(hdl *web.UserHandler, mdls []gin.HandlerFunc) *gin.Engine {
 	server := gin.Default()
 	server.Use(mdls...)
-	hdl.RegisterRoutesv1(server.Group("/users"))
+	hdl.RegisterRoutes(server.Group("/users"))
 	return server
 }
 
