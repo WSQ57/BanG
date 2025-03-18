@@ -2,6 +2,7 @@ package dao
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"time"
 
@@ -10,8 +11,8 @@ import (
 )
 
 var (
-	ErrUserDuplicateEmail = errors.New("邮箱冲突")
-	ErrUserNotFound       = gorm.ErrRecordNotFound
+	ErrUserDuplicate = errors.New("邮箱or手机号冲突")
+	ErrUserNotFound  = gorm.ErrRecordNotFound
 )
 
 type UserDAO struct {
@@ -34,7 +35,7 @@ func (dao *UserDAO) Insert(ctx context.Context, u User) error {
 	if mysqlErr, ok := err.(*mysql.MySQLError); ok {
 		const uniqueConflictErr uint16 = 1062 // 唯一索引错误吗
 		if mysqlErr.Number == uniqueConflictErr {
-			return ErrUserDuplicateEmail
+			return ErrUserDuplicate
 		}
 	}
 	return err
@@ -43,6 +44,13 @@ func (dao *UserDAO) Insert(ctx context.Context, u User) error {
 func (dao *UserDAO) FindByEmail(ctx context.Context, email string) (User, error) {
 	var u User
 	err := dao.db.WithContext(ctx).Where("email = ?", email).First(&u).Error
+
+	return u, err
+}
+
+func (dao *UserDAO) FindByPhone(ctx context.Context, phone string) (User, error) {
+	var u User
+	err := dao.db.WithContext(ctx).Where("phone = ?", phone).First(&u).Error
 
 	return u, err
 }
@@ -62,7 +70,10 @@ func (dao *UserDAO) Update(ctx context.Context, u User) error {
 type User struct {
 	Id int64 `gorm:"primaryKey,autoIncrement"`
 	// 所有用户唯一
-	Email    string `gorm:"unique"`
+	Email sql.NullString `gorm:"unique"` // 唯一索引，允许有多个空值
+
+	// 如果设置为string `gorm:"unique"` 通过email注册，空字符串会唯一索引冲突
+	Phone    sql.NullString `gorm:"unique"`
 	Password string
 
 	// 新增字段

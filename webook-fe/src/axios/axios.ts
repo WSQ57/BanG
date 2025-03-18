@@ -2,9 +2,9 @@ import axios from "axios";
 import router from "next/router";
 const instance = axios.create({
     // 这边记得修改你对应的配置文件
-    baseURL:  "http://localhost:8080",
+    baseURL:  "http://localhost:8080", // 80端口对应k8s 8080为单机
     withCredentials: true
-})
+}) 
 
 export interface Result<T> {
     code: number,

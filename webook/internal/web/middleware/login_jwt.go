@@ -72,9 +72,10 @@ func (l *LoginJWTMiddleware) Build() gin.HandlerFunc {
 			return
 		}
 
-		// 每10s刷新
+		// 剩10s刷新
 		now := time.Now()
-		if now.Sub(claims.NotBefore.Time) > time.Second*10 {
+		// if now.Sub(claims.NotBefore.Time) > time.Second*10 {
+		if claims.ExpiresAt.Time.Sub(now) < time.Second*10 {
 			// 刷新
 			claims.NotBefore = jwt.NewNumericDate(now)
 			claims.ExpiresAt = jwt.NewNumericDate(now.Add(time.Minute))

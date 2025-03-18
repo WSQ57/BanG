@@ -3,17 +3,16 @@ package main
 import (
 	"dream/webook/config"
 	"dream/webook/internal/repository"
+	"dream/webook/internal/repository/cache"
 	"dream/webook/internal/repository/dao"
 	"dream/webook/internal/service"
+	"dream/webook/internal/service/sms/memory"
 	"dream/webook/internal/web"
 	"dream/webook/internal/web/middleware"
-	"dream/webook/pkg/ginx/middlewares/ratelimit"
 	"strings"
 	"time"
 
 	"github.com/gin-contrib/cors"
-	"github.com/gin-contrib/sessions"
-	"github.com/gin-contrib/sessions/memstore"
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 	"gorm.io/driver/mysql"
@@ -24,7 +23,10 @@ func main() {
 
 	db := initDB()
 	server := initWebServer()
-	u := initUser(db)
+	redisClient := redis.NewClient(&redis.Options{
+		Addr: config.Config.Redis.Addr,
+	})
+	u := initUser(db, redisClient)
 	u.RegisterRoutesv1(server.Group("/users"))
 
 	// server := gin.Default()
@@ -38,10 +40,10 @@ func main() {
 func initWebServer() *gin.Engine {
 	server := gin.Default()
 
-	redisClient := redis.NewClient(&redis.Options{
-		Addr: config.Config.Redis.Addr,
-	})
-	server.Use(ratelimit.NewBuilder(redisClient, time.Second, 100).Build()) // 每秒100
+	// redisClient := redis.NewClient(&redis.Options{
+	// 	Addr: config.Config.Redis.Addr,
+	// })
+	// server.Use(ratelimit.NewBuilder(redisClient, time.Second, 100).Build()) // 每秒100
 
 	// 配置 CORS
 	server.Use(cors.New(cors.Config{
@@ -55,7 +57,7 @@ func initWebServer() *gin.Engine {
 				// 开发环境
 				return true
 			}
-			return strings.Contains(origin, "yourcompany.com")
+			return strings.Contains(origin, "live.webook.com")
 		},
 		MaxAge: 12 * time.Hour,
 	}))
@@ -70,25 +72,31 @@ func initWebServer() *gin.Engine {
 	// panic(err)
 	// }
 
-	store := memstore.NewStore([]byte("5GsytMZWJd6fEHDKyhPH2tPQvbdAUdjp"), []byte("nAdm2JYmuJmyAPKkJpC6sVwsazMNFYuA"))
+	// store := memstore.NewStore([]byte("5GsytMZWJd6fEHDKyhPH2tPQvbdAUdjp"), []byte("nAdm2JYmuJmyAPKkJpC6sVwsazMNFYuA"))
 
-	server.Use(sessions.Sessions("mysession", store))
+	// server.Use(sessions.Sessions("mysession", store))
 
 	// 步骤3
 	// server.Use(middleware.NewLoginMiddlewareBuilder().IgnorePaths("/users/login").IgnorePaths("/users/signup").Build())
 
-	server.Use(middleware.NewLoginJWTMiddlewareBuilder().IgnorePaths("/users/login").IgnorePaths("/users/signup").Build())
+	server.Use(middleware.NewLoginJWTMiddlewareBuilder().IgnorePaths("/users/login").IgnorePaths("/users/signup").IgnorePaths("/users/login_sms/code/send").IgnorePaths("/users/login_sms").Build())
 
 	// v1
 	// server.Use(middleware.CheckLogin())
 	return server
 }
 
-func initUser(db *gorm.DB) *web.UserHandler {
+func initUser(db *gorm.DB, rdb redis.Cmdable) *web.UserHandler {
 	dao := dao.NewUserDAO(db)
-	repo := repository.NewUserRepository(dao)
+	uc := cache.NewUserCache(rdb)
+	repo := repository.NewUserRepository(dao, uc)
 	svc := service.NewUserService(repo)
-	u := web.NewUserHandler(svc)
+
+	codeCache := cache.NewCodeCache(rdb)
+	codeRepo := repository.NewCodeRepository(codeCache)
+	smsSvc := memory.NewService()
+	codeSvc := service.NewCodeService(codeRepo, smsSvc)
+	u := web.NewUserHandler(svc, codeSvc)
 	return u
 }
 
