@@ -34,7 +34,7 @@ func NewCodeCache(client redis.Cmdable) *CodeCache {
 }
 
 func (cache *CodeCache) Set(ctx context.Context, biz, phone, code string) error {
-	res, err := cache.client.Eval(ctx, luaSetCode, []string{cache.key(ctx, biz, phone)}, code).Int()
+	res, err := cache.client.Eval(ctx, luaSetCode, []string{cache.key(biz, phone)}, code).Int()
 	if err != nil {
 		return err
 	}
@@ -50,7 +50,7 @@ func (cache *CodeCache) Set(ctx context.Context, biz, phone, code string) error 
 }
 
 func (cache *CodeCache) Verify(ctx context.Context, biz, phone, inputCode string) (bool, error) {
-	res, err := cache.client.Eval(ctx, luaVerifyCode, []string{cache.key(ctx, biz, phone)}, inputCode).Int()
+	res, err := cache.client.Eval(ctx, luaVerifyCode, []string{cache.key(biz, phone)}, inputCode).Int()
 	if err != nil {
 		return false, err
 	}
@@ -68,6 +68,6 @@ func (cache *CodeCache) Verify(ctx context.Context, biz, phone, inputCode string
 	}
 }
 
-func (cache *CodeCache) key(ctx context.Context, biz, phone string) string {
+func (cache *CodeCache) key(biz, phone string) string {
 	return fmt.Sprintf("phone_code:%s:%s", biz, phone)
 }

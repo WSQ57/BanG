@@ -17,8 +17,8 @@ type Service struct {
 
 func NewService(client *sms.Client, appId, signName string) *Service {
 	return &Service{
-		appId:    ekit.ToPtr[string](appId),
-		signName: ekit.ToPtr[string](signName),
+		appId:    ekit.ToPtr(appId),
+		signName: ekit.ToPtr(signName),
 		client:   client,
 	}
 }
@@ -37,14 +37,14 @@ func (s *Service) Send(ctx context.Context, tplId string, args []string, number 
 	}
 	for _, status := range resp.Response.SendStatusSet {
 		if status.Code == nil || *status.Code != "Ok" {
-			return fmt.Errorf("短信发送失败 %s, %s.", *status.Code, *status.Message)
+			return fmt.Errorf("短信发送失败 %s, %s", *status.Code, *status.Message)
 		}
 	}
 	return nil
 }
 
 func (s *Service) toStringPtrSlice(src []string) []*string {
-	return slice.Map[string, *string](src, func(idx int, src string) *string {
+	return slice.Map(src, func(idx int, src string) *string {
 		return &src
 	})
 }

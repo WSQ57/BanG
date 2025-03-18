@@ -17,7 +17,7 @@ func TestSender(t *testing.T) {
 	if !ok {
 		t.Fatal()
 	}
-	secretKey, ok := os.LookupEnv("SMS_SECRET_KEY")
+	secretKey, _ := os.LookupEnv("SMS_SECRET_KEY")
 
 	c, err := sms.NewClient(common.NewCredential(secretId, secretKey),
 		"ap-nanjing",
