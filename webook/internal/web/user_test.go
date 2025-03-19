@@ -3,14 +3,16 @@ package web
 import (
 	"bytes"
 	"context"
+	"dream/webook/internal/domain"
+	"dream/webook/internal/repository"
+	repomocks "dream/webook/internal/repository/mocks"
+	"dream/webook/internal/service"
+	svcmocks "dream/webook/internal/service/mocks"
 	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-
-	"dream/webook/internal/domain"
-	"dream/webook/internal/service"
-	svcmocks "dream/webook/internal/service/mocks"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -190,4 +192,59 @@ func TestMock(t *testing.T) {
 		Email: "123@qq.com",
 	})
 	t.Log(err)
+}
+
+func TestUserHandler_Login(t *testing.T) {
+	// 做成测试用例用到的事件
+	now := time.Now()
+	testCases := []struct {
+		name string
+		mock func(ctrl *gomock.Controller) repository.UserRepository
+
+		ctx      context.Context
+		email    string
+		password string
+
+		wantUser domain.User
+		wantErr  error
+	}{
+		{
+			name:     "登录成功",
+			email:    "1234@qq.com",
+			password: "helloworld123",
+			mock: func(ctrl *gomock.Controller) repository.UserRepository {
+				userRepo := repomocks.NewMockUserRepository(ctrl)
+				userRepo.EXPECT().FindByEmail(gomock.Any(), "1234@qq.com").Return(domain.User{
+					Email:    "1234@qq.com",
+					Password: "$2a$10$kNDDNA.mFPkmZ3fF6oQ/pev6CZpvNpho2q3Hp7dtHQzt759a7ITCK",
+					Ctime:    now,
+				}, nil)
+				return userRepo
+			},
+			wantErr: nil,
+			wantUser: domain.User{
+				Email:    "1234@qq.com",
+				Password: "$2a$10$kNDDNA.mFPkmZ3fF6oQ/pev6CZpvNpho2q3Hp7dtHQzt759a7ITCK",
+				Ctime:    now,
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			svc := service.NewUserService(tc.mock(ctrl))
+			u, err := svc.Login(tc.ctx, tc.email, tc.password)
+
+			assert.Equal(t, tc.wantErr, err)
+			assert.Equal(t, tc.wantUser, u)
+
+		})
+	}
+}
+
+func TestEncrypted(t *testing.T) {
+	res, err := bcrypt.GenerateFromPassword([]byte("helloworld123"), bcrypt.DefaultCost)
+	if err == nil {
+		t.Log(string(res))
+	}
 }

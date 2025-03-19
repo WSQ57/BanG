@@ -6,7 +6,6 @@ import (
 	"dream/webook/internal/domain"
 	"dream/webook/internal/repository/cache"
 	"dream/webook/internal/repository/dao"
-	"fmt"
 	"time"
 )
 
@@ -21,8 +20,8 @@ type UserRepository interface {
 	FindByEmail(ctx context.Context, Email string) (domain.User, error)
 	FindByPhone(ctx context.Context, phone string) (domain.User, error)
 	FindById(ctx context.Context, id int64) (domain.User, error)
-	entityToDomain(ud dao.User) domain.User
-	domainToEntity(ud domain.User) dao.User
+	// entityToDomain(ud dao.User) domain.User
+	// domainToEntity(ud domain.User) dao.User
 }
 
 type CacheUserRepository struct {
@@ -58,7 +57,7 @@ func (r *CacheUserRepository) FindByEmail(ctx context.Context, Email string) (do
 	// 先从cache找
 	// 再从dao找
 	// 找到写回cache
-	user, err := r.dao.FindByEmail(context.Background(), Email)
+	user, err := r.dao.FindByEmail(ctx, Email)
 	if err != nil {
 		return domain.User{}, err
 	}
@@ -108,15 +107,18 @@ func (r *CacheUserRepository) FindById(ctx context.Context, id int64) (domain.Us
 	}
 
 	u = r.entityToDomain(ue)
-	err = r.cache.Set(ctx, u)
-	go func() { // 异步来加速，缓存本来就有数据一致性问题
-		if err != nil {
-			// 缓存失败，不阻塞业务逻辑
-			// 继续返回数据库查询的结果
-			// 打日志做监控 此时，查询失败、存也失败
-			fmt.Println("缓存失败")
-		}
-	}()
+
+	_ = r.cache.Set(ctx, u)
+
+	// go func() { // 异步来加速，缓存本来就有数据一致性问题
+	// 	err = r.cache.Set(ctx, u)
+	// 	if err != nil {
+	// 		// 缓存失败，不阻塞业务逻辑
+	// 		// 继续返回数据库查询的结果
+	// 		// 打日志做监控 此时，查询失败、存也失败
+	// 		fmt.Println("缓存失败")
+	// 	}
+	// }()
 	return u, nil
 }
 
@@ -127,8 +129,8 @@ func (r *CacheUserRepository) entityToDomain(ud dao.User) domain.User {
 		Password: ud.Password,
 		Phone:    ud.Phone.String,
 		Nickname: ud.Nickname,
-		Birthday: time.Unix(ud.Birthday, 0),
-		Ctime:    time.Unix(ud.Ctime, 0),
+		Birthday: time.UnixMilli(ud.Birthday),
+		Ctime:    time.UnixMilli(ud.Ctime),
 		AboutMe:  ud.AboutMe,
 	}
 }
@@ -146,8 +148,8 @@ func (r *CacheUserRepository) domainToEntity(ud domain.User) dao.User {
 		},
 		Password: ud.Password,
 		Nickname: ud.Nickname,
-		Birthday: ud.Birthday.Unix(),
-		Ctime:    ud.Ctime.Unix(),
+		Birthday: ud.Birthday.UnixMilli(),
+		Ctime:    ud.Ctime.UnixMilli(),
 		AboutMe:  ud.AboutMe,
 	}
 }
