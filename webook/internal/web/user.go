@@ -23,13 +23,13 @@ var _ handler = (*UserHandler)(nil)
 
 // 定义User相关路由
 type UserHandler struct {
-	svc         *service.UserService
-	codeSvc     *service.CodeService
+	svc         service.UserService
+	codeSvc     service.CodeService
 	emailExp    *regexp.Regexp
 	passwordExp *regexp.Regexp
 }
 
-func NewUserHandler(svc *service.UserService, codeSvc *service.CodeService) *UserHandler {
+func NewUserHandler(svc service.UserService, codeSvc service.CodeService) *UserHandler {
 	const (
 		emailRegexp    = "^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\\.[a-zA-Z0-9-.]+$"
 		passwordRegexp = "^(?=.*\\d)(?=.*[A-z])[\\da-zA-Z]{1,72}$"
@@ -166,7 +166,7 @@ func (u *UserHandler) Signup(ctx *gin.Context) {
 	// Bind 方法 根据Content-type解析数据到req
 	// 解析错误则直接写会400的错误
 	if err := ctx.Bind(&req); err != nil {
-		ctx.String(http.StatusOK, "系统错误")
+		ctx.String(http.StatusBadRequest, "系统错误")
 		return
 	}
 

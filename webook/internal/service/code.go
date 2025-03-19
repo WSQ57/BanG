@@ -14,14 +14,19 @@ var (
 	ErrSetCodeSendTooMany = repository.ErrSetCodeSendTooMany
 )
 
-type CodeService struct {
-	repo   *repository.CodeRepository
+type CodeService interface {
+	Send(ctx context.Context, biz string, phone string) error
+	Verify(ctx context.Context, biz string, phone string, inputCode string) (bool, error)
+}
+
+type NoramlCodeService struct {
+	repo   repository.CodeRepository
 	smsSvc sms.Service
 	// tplId  string
 }
 
-func NewCodeService(repo *repository.CodeRepository, smsSvc sms.Service) *CodeService {
-	return &CodeService{
+func NewCodeService(repo repository.CodeRepository, smsSvc sms.Service) CodeService {
+	return &NoramlCodeService{
 		repo:   repo,
 		smsSvc: smsSvc,
 		// tplId:  codeTplId,
@@ -29,7 +34,7 @@ func NewCodeService(repo *repository.CodeRepository, smsSvc sms.Service) *CodeSe
 }
 
 // biz区别业务场景
-func (svc *CodeService) Send(ctx context.Context, biz string, phone string) error {
+func (svc *NoramlCodeService) Send(ctx context.Context, biz string, phone string) error {
 	// 生成验证码
 	code := svc.generateCode()
 	// 塞进去redis
@@ -43,7 +48,7 @@ func (svc *CodeService) Send(ctx context.Context, biz string, phone string) erro
 	return err
 }
 
-func (svc *CodeService) Verify(ctx context.Context, biz string, phone string, code string) (bool, error) {
+func (svc *NoramlCodeService) Verify(ctx context.Context, biz string, phone string, code string) (bool, error) {
 	//phonecode:$biz:$phone
 	return svc.repo.Verify(ctx, biz, phone, code)
 }
@@ -52,7 +57,7 @@ func (svc *CodeService) Verify(ctx context.Context, biz string, phone string, co
 
 // }
 
-func (svc *CodeService) generateCode() string {
+func (svc *NoramlCodeService) generateCode() string {
 	num := rand.Intn(1000000)
 	// 不够6位，补0
 	return fmt.Sprintf("%06d", num)
