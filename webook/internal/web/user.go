@@ -124,6 +124,7 @@ func (u *UserHandler) SendLoginSMSCode(ctx *gin.Context) {
 
 	var req Req
 	if err := ctx.Bind(&req); err != nil {
+		ctx.String(http.StatusOK, "系统错误")
 		return
 	}
 
@@ -139,7 +140,8 @@ func (u *UserHandler) SendLoginSMSCode(ctx *gin.Context) {
 		})
 	default:
 		ctx.JSON(http.StatusOK, Result{
-			Msg: "系统错误",
+			Code: 5,
+			Msg:  "系统错误",
 		})
 
 	}
