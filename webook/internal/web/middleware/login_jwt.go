@@ -1,11 +1,11 @@
 package middleware
 
 import (
-	"dream/webook/internal/web"
 	"encoding/gob"
 	"net/http"
-	"strings"
 	"time"
+
+	ijwt "dream/webook/internal/web/jwt"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
@@ -14,10 +14,13 @@ import (
 // JWT登陆校验
 type LoginJWTMiddleware struct {
 	paths []string
+	ijwt.Handler
 }
 
-func NewLoginJWTMiddlewareBuilder() *LoginJWTMiddleware {
-	return &LoginJWTMiddleware{}
+func NewLoginJWTMiddlewareBuilder(jwtHdl ijwt.Handler) *LoginJWTMiddleware {
+	return &LoginJWTMiddleware{
+		Handler: jwtHdl,
+	}
 }
 
 // 中间方法，用于构建部分
@@ -37,28 +40,24 @@ func (l *LoginJWTMiddleware) Build() gin.HandlerFunc {
 			}
 		}
 
-		tokenHeader := ctx.GetHeader("Authorization")
-		if tokenHeader == "" {
+		//用jwt校验
+		tokenStr := l.ExtractToken(ctx)
+		if tokenStr == "" {
+			// 没登录
 			ctx.AbortWithStatus(http.StatusUnauthorized)
 			return
 		}
-		segs := strings.Split(tokenHeader, " ") // 切Bearer
-		if len(segs) != 2 {
-			ctx.AbortWithStatus(http.StatusUnauthorized)
-			return
-		}
-		tokenStr := segs[1]
-		claims := &web.UserClaims{} // 因为parse里面会赋值，因此要传入指针
+		claims := &ijwt.UserClaims{} // 因为parse里面会赋值，因此要传入指针
 
 		token, err := jwt.ParseWithClaims(tokenStr, claims, func(t *jwt.Token) (any, error) {
-			return []byte("svpmj5zytsDADRR2YX4ZnrJdT2xQm8BK"), nil
+			return ijwt.AtKey, nil
 		})
 		if err != nil {
 			// 没登陆
 			ctx.AbortWithStatus(http.StatusUnauthorized)
 			return
 		}
-		if token == nil || !token.Valid || claims.UserId == 0 {
+		if token == nil || !token.Valid || claims.Uid == 0 {
 			// 没登陆
 			ctx.AbortWithStatus(http.StatusUnauthorized)
 			return
@@ -72,21 +71,30 @@ func (l *LoginJWTMiddleware) Build() gin.HandlerFunc {
 			return
 		}
 
-		// 剩10s刷新
-		now := time.Now()
-		// if now.Sub(claims.NotBefore.Time) > time.Second*10 {
-		if claims.ExpiresAt.Time.Sub(now) < time.Second*10 {
-			// 刷新
-			claims.NotBefore = jwt.NewNumericDate(now)
-			claims.ExpiresAt = jwt.NewNumericDate(now.Add(time.Minute))
-			tokenStr, err = token.SignedString([]byte("svpmj5zytsDADRR2YX4ZnrJdT2xQm8BK"))
-			if err != nil {
-				// 记录日志
-				println("续约失败")
-			}
-			ctx.Header("x-jwt-token", tokenStr)
+		err = l.CheckSession(ctx, claims.Ssid)
+
+		if err != nil {
+			// redis有问题 或者推出登陆
+			ctx.AbortWithStatus(http.StatusUnauthorized)
+			return
 		}
 
+		//
+		// now := time.Now()
+		// // if now.Sub(claims.NotBefore.Time) > time.Second*10 {
+		// if claims.ExpiresAt.Time.Sub(now) < time.Second*10 {
+		// 	// 刷新
+		// 	claims.NotBefore = jwt.NewNumericDate(now)
+		// 	claims.ExpiresAt = jwt.NewNumericDate(now.Add(time.Minute))
+		// 	tokenStr, err = token.SignedString([]byte("svpmj5zytsDADRR2YX4ZnrJdT2xQm8BK"))
+		// 	if err != nil {
+		// 		// 记录日志
+		// 		println("续约失败")
+		// 	}
+		// 	ctx.Header("x-jwt-token", tokenStr)
+		// }
+
 		ctx.Set("claims", claims)
+		ctx.Set("userId", claims.Uid)
 	}
 }

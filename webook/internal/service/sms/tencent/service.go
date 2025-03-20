@@ -24,7 +24,7 @@ func NewService(client *sms.Client, appId, signName string) *Service {
 	}
 }
 
-func (s *Service) Send(ctx context.Context, tplId string, args []string, number ...string) error {
+func (s *Service) Send(ctx context.Context, biz string, args []string, number ...string) error {
 	// limited, err := s.limiter.Limit(ctx, "sms:tencent")
 	// if err != nil {
 	// 	// 系统错误
@@ -41,7 +41,7 @@ func (s *Service) Send(ctx context.Context, tplId string, args []string, number 
 	req := sms.NewSendSmsRequest()
 	req.SmsSdkAppId = s.appId
 	req.SignName = s.signName
-	req.TemplateId = &tplId
+	req.TemplateId = &biz
 	req.PhoneNumberSet = s.toStringPtrSlice(number)
 	req.TemplateParamSet = s.toStringPtrSlice(args)
 	resp, err := s.client.SendSms(req)

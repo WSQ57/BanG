@@ -8,6 +8,7 @@ import (
 	repomocks "dream/webook/internal/repository/mocks"
 	"dream/webook/internal/service"
 	svcmocks "dream/webook/internal/service/mocks"
+	ijwt "dream/webook/internal/web/jwt"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -36,7 +37,7 @@ func TestNil(t *testing.T) {
 }
 
 func testTypeAssert(c any) {
-	_, ok := c.(*UserClaims)
+	_, ok := c.(*ijwt.UserClaims)
 	println(ok)
 }
 

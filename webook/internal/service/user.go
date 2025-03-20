@@ -23,6 +23,7 @@ type UserService interface {
 	Profile(ctx context.Context, id int64) (domain.User, error)
 	EditProfile(ctx context.Context, u domain.User) error
 	FindOrCreate(ctx context.Context, phone string) (domain.User, error)
+	FindOrCreateByWechat(ctx context.Context, wechatInfo domain.WechatInfo) (domain.User, error)
 }
 
 type NoramlUserService struct {
@@ -133,4 +134,21 @@ func PathDownGrade(ctx context.Context, quick, slow func()) {
 		return
 	}
 	slow()
+}
+
+func (svc *NoramlUserService) FindOrCreateByWechat(ctx context.Context, wechatInfo domain.WechatInfo) (domain.User, error) {
+	u, err := svc.Repo.FindByWechat(ctx, wechatInfo.OpenID)
+	fmt.Println("service--1--", err)
+	if err != repository.ErrUserNotFound {
+		return u, err
+	}
+	u = domain.User{
+		WechatInfo: wechatInfo,
+	}
+	err = svc.Repo.Create(ctx, u)
+	if err != nil && err != repository.ErrUserDuplicate {
+		return u, err
+	}
+	// 因为这里会遇到主从延迟的问题
+	return svc.Repo.FindByWechat(ctx, wechatInfo.OpenID)
 }

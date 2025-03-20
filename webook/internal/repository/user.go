@@ -20,6 +20,7 @@ type UserRepository interface {
 	FindByEmail(ctx context.Context, Email string) (domain.User, error)
 	FindByPhone(ctx context.Context, phone string) (domain.User, error)
 	FindById(ctx context.Context, id int64) (domain.User, error)
+	FindByWechat(ctx context.Context, openID string) (domain.User, error)
 	// entityToDomain(ud dao.User) domain.User
 	// domainToEntity(ud domain.User) dao.User
 }
@@ -120,6 +121,14 @@ func (r *CacheUserRepository) FindById(ctx context.Context, id int64) (domain.Us
 	// 	}
 	// }()
 	return u, nil
+}
+
+func (r *CacheUserRepository) FindByWechat(ctx context.Context, openID string) (domain.User, error) {
+	u, err := r.dao.FindByWechat(ctx, openID)
+	if err != nil {
+		return domain.User{}, err
+	}
+	return r.entityToDomain(u), nil
 }
 
 func (r *CacheUserRepository) entityToDomain(ud dao.User) domain.User {

@@ -21,6 +21,7 @@ type UserDAO interface {
 	FindByPhone(ctx context.Context, phone string) (User, error)
 	FindById(ctx context.Context, id int64) (User, error)
 	Update(ctx context.Context, u User) error
+	FindByWechat(ctx context.Context, openID string) (User, error)
 }
 
 type GORMUserDAO struct {
@@ -73,6 +74,13 @@ func (dao *GORMUserDAO) Update(ctx context.Context, u User) error {
 	return dao.db.WithContext(ctx).Where("id = ?", u.Id).Updates(&u).Error
 }
 
+func (dao *GORMUserDAO) FindByWechat(ctx context.Context, openID string) (User, error) {
+	var u User
+	err := dao.db.WithContext(ctx).Where("wechat_open_id = ?", openID).First(&u).Error
+	//err := dao.db.WithContext(ctx).First(&u, "email = ?", email).Error
+	return u, err
+}
+
 // User直接对应数据库表结构
 // 有些人叫做entity 有些叫做model 有些人叫做PO
 type User struct {
@@ -88,6 +96,10 @@ type User struct {
 	Nickname string `gorm:"type=varchar(128)"`
 	Birthday int64
 	AboutMe  string `gorm:"type=varchar(4096)"`
+
+	// 微信的字段
+	WechatUnionID sql.NullString
+	WechatOpenID  sql.NullString `gorm:"unique"`
 
 	// 创建时间 ms
 	Ctime int64

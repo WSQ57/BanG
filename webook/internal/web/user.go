@@ -1,6 +1,7 @@
 package web
 
 import (
+	"dream/webook/config"
 	"dream/webook/internal/domain"
 	"dream/webook/internal/service"
 	"fmt"
@@ -10,7 +11,10 @@ import (
 	regexp "github.com/dlclark/regexp2"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
-	jwt "github.com/golang-jwt/jwt/v5"
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/redis/go-redis/v9"
+
+	ijwt "dream/webook/internal/web/jwt"
 )
 
 const biz = "login"
@@ -27,6 +31,7 @@ type UserHandler struct {
 	codeSvc     service.CodeService
 	emailExp    *regexp.Regexp
 	passwordExp *regexp.Regexp
+	ijwt.Handler
 }
 
 func NewUserHandler(svc service.UserService, codeSvc service.CodeService) *UserHandler {
@@ -43,6 +48,9 @@ func NewUserHandler(svc service.UserService, codeSvc service.CodeService) *UserH
 		codeSvc:     codeSvc,
 		emailExp:    emailExp,
 		passwordExp: passwordExp,
+		Handler: ijwt.NewRedisJWTHandler(redis.NewClient(&redis.Options{
+			Addr: config.Config.Redis.Addr,
+		})),
 	}
 }
 
@@ -59,6 +67,62 @@ func (u *UserHandler) RegisterRoutes(ug *gin.RouterGroup) {
 	ug.GET("profile", u.ProfileJWT)
 	ug.POST("login_sms/code/send", u.SendLoginSMSCode)
 	ug.POST("login_sms", u.LoginSMS)
+	ug.POST("refresh_token", u.RefreshToken)
+}
+
+// 可同时刷新长短token，用redis来记录是否有效，即refreshtoken为一次性的
+// 还可比较useragent提要安全性
+// func (u *UserHandler) RefreshToken(ctx *gin.Context) {
+// 	// 只有这个接口拿出来的才是refresh token，其他都是access token
+// 	refreshToken := ExtractToken(ctx)
+// 	var rc RefreshClaims
+// 	token, err := jwt.ParseWithClaims(refreshToken, &rc, func(t *jwt.Token) (any, error) {
+// 		return u.rtKey, nil
+// 	})
+// 	if err != nil || !token.Valid {
+// 		ctx.AbortWithStatus(http.StatusUnauthorized)
+// 		return
+// 	}
+// 	// 搞个新的access token
+// 	u.setJWTToken(ctx, rc.Uid)
+// 	ctx.JSON(http.StatusOK, Result{
+// 		Msg: "Ok",
+// 	})
+// }
+
+func (u *UserHandler) RefreshToken(ctx *gin.Context) {
+	// 只有在这个接口，接收到的才是 长的refreshtoken
+	refreshTokenStr := u.ExtractToken(ctx)
+	if refreshTokenStr == "" {
+		ctx.AbortWithStatus(http.StatusUnauthorized)
+		return
+	}
+	var rc ijwt.RefreshClaims
+	token, err := jwt.ParseWithClaims(refreshTokenStr, &rc, func(token *jwt.Token) (interface{}, error) {
+		return []byte("95osj3fUD7fo0mlYdDbncXz4VD2igvf0"), nil
+	})
+	// 校验传过来的长token
+	if err != nil || !token.Valid {
+		ctx.AbortWithStatus(http.StatusUnauthorized)
+		return
+	}
+	// 校验ssid，即判断redis中有没有对应的ssid
+	err = u.CheckSession(ctx, rc.Ssid)
+	if err != nil {
+		ctx.AbortWithStatus(http.StatusUnauthorized)
+		return
+	}
+	// 如果长token有效，那就重新给个新的access token
+	// 搞个新的 access_token
+	err = u.SetJWTToken(ctx, rc.Uid, rc.Ssid)
+	if err != nil {
+		ctx.AbortWithStatus(http.StatusUnauthorized)
+		return
+	}
+
+	ctx.JSON(http.StatusOK, Result{
+		Msg: "刷新成功",
+	})
 }
 
 func (u *UserHandler) LoginSMS(ctx *gin.Context) {
@@ -101,7 +165,16 @@ func (u *UserHandler) LoginSMS(ctx *gin.Context) {
 		})
 		return
 	}
-	if err = u.setJWTToken(ctx, ue.Id); err != nil {
+	if err = u.SetLoginToken(ctx, ue.Id); err != nil {
+		ctx.JSON(http.StatusOK, Result{
+			Code: 5,
+			Msg:  "系统错误",
+			Data: nil,
+		})
+		return
+	}
+
+	if err = u.SetLoginToken(ctx, ue.Id); err != nil {
 		ctx.JSON(http.StatusOK, Result{
 			Code: 5,
 			Msg:  "系统错误",
@@ -154,6 +227,19 @@ func (u *UserHandler) Logout(ctx *gin.Context) {
 	})
 	sess.Save()
 	ctx.String(http.StatusOK, "退出成功")
+}
+
+func (u *UserHandler) LogoutJWT(ctx *gin.Context) {
+	err := u.ClearToken(ctx)
+	if err != nil {
+		ctx.JSON(http.StatusOK, Result{
+			Code: 5,
+			Msg:  "系统错误",
+		})
+	}
+	ctx.JSON(http.StatusOK, Result{
+		Msg: "退出登录成功",
+	})
 }
 
 func (u *UserHandler) Signup(ctx *gin.Context) {
@@ -245,7 +331,7 @@ func (u *UserHandler) LoginJWT(ctx *gin.Context) {
 	}
 
 	// 生成JWTtoken
-	if err = u.setJWTToken(ctx, user.Id); err != nil {
+	if err = u.SetLoginToken(ctx, user.Id); err != nil {
 		ctx.String(http.StatusOK, "系统错误")
 		return
 	}
@@ -254,25 +340,25 @@ func (u *UserHandler) LoginJWT(ctx *gin.Context) {
 	ctx.String(http.StatusOK, "登录成功")
 }
 
-func (*UserHandler) setJWTToken(ctx *gin.Context, uid int64) error {
-	claims := UserClaims{
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 30)),
-			NotBefore: jwt.NewNumericDate(time.Now()),
-		}, // valid会自动检验是否过期
-		UserId:    uid,
-		UserAgent: ctx.Request.UserAgent(),
-	}
+// func (*UserHandler) setJWTToken(ctx *gin.Context, uid int64) error {
+// 	claims := UserClaims{
+// 		RegisteredClaims: jwt.RegisteredClaims{
+// 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 30)),
+// 			NotBefore: jwt.NewNumericDate(time.Now()),
+// 		}, // valid会自动检验是否过期
+// 		UserId:    uid,
+// 		UserAgent: ctx.Request.UserAgent(),
+// 	}
 
-	token := jwt.NewWithClaims(jwt.SigningMethodHS512, claims)
-	tokenStr, err := token.SignedString([]byte("svpmj5zytsDADRR2YX4ZnrJdT2xQm8BK"))
-	if err != nil {
-		return err
-	}
-	fmt.Println(tokenStr)
-	ctx.Header("x-jwt-token", tokenStr)
-	return nil
-}
+// 	token := jwt.NewWithClaims(jwt.SigningMethodHS512, claims)
+// 	tokenStr, err := token.SignedString([]byte("svpmj5zytsDADRR2YX4ZnrJdT2xQm8BK"))
+// 	if err != nil {
+// 		return err
+// 	}
+// 	fmt.Println(tokenStr)
+// 	ctx.Header("x-jwt-token", tokenStr)
+// 	return nil
+// }
 
 func (u *UserHandler) Login(ctx *gin.Context) {
 	type LoginReq struct {
@@ -369,7 +455,7 @@ func (u *UserHandler) EditJWT(ctx *gin.Context) {
 		return
 	}
 
-	claims, ok := ctx.MustGet("claims").(*UserClaims)
+	claims, ok := ctx.MustGet("claims").(*ijwt.UserClaims)
 	if !ok {
 		ctx.AbortWithStatus(http.StatusUnauthorized)
 		return
@@ -380,7 +466,7 @@ func (u *UserHandler) EditJWT(ctx *gin.Context) {
 		return
 	}
 	err = u.svc.EditProfile(ctx, domain.User{
-		Id:       claims.UserId,
+		Id:       claims.Uid,
 		Birthday: birthday,
 		Nickname: req.Nickname,
 		AboutMe:  req.AboutMe,
@@ -408,8 +494,8 @@ func (u *UserHandler) ProfileJWT(ctx *gin.Context) {
 		AboutMe  string
 	}
 
-	if claims, ok := ctx.MustGet("claims").(*UserClaims); ok {
-		u, err := u.svc.Profile(ctx, claims.UserId)
+	if claims, ok := ctx.MustGet("claims").(*ijwt.UserClaims); ok {
+		u, err := u.svc.Profile(ctx, claims.Uid)
 		if err != nil {
 			ctx.String(http.StatusOK, "用户不存在")
 			return
@@ -455,8 +541,8 @@ func (u *UserHandler) Profile(ctx *gin.Context) {
 	}
 }
 
-type UserClaims struct {
-	UserId int64
-	jwt.RegisteredClaims
-	UserAgent string
-}
+// type UserClaims struct {
+// 	UserId int64
+// 	jwt.RegisteredClaims
+// 	UserAgent string
+// }

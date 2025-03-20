@@ -12,6 +12,7 @@ import (
 	"dream/webook/internal/repository/dao"
 	"dream/webook/internal/service"
 	"dream/webook/internal/web"
+	"dream/webook/internal/web/jwt"
 	"dream/webook/ioc"
 	"github.com/gin-gonic/gin"
 )
@@ -30,7 +31,10 @@ func initWebServer() *gin.Engine {
 	smsService := ioc.InitSMSService()
 	codeService := service.NewCodeService(codeRepository, smsService)
 	userHandler := web.NewUserHandler(userService, codeService)
-	v := ioc.InitMiddlewares(cmdable)
-	engine := ioc.InitGin(userHandler, v)
+	handler := jwt.NewRedisJWTHandler(cmdable)
+	v := ioc.InitMiddlewares(cmdable, handler)
+	wechatService := ioc.InitWechatService()
+	weChatOAuth2Handler := web.NewWeChatOAuth2Handler(wechatService, userService, handler)
+	engine := ioc.InitGin(userHandler, v, weChatOAuth2Handler)
 	return engine
 }
